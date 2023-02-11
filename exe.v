@@ -7,7 +7,7 @@
 //*************************************************************************
 module exe(                         // 执行级
     input              EXE_valid,   // 执行级有效信号
-    input      [166:0] ID_EXE_bus_r,// ID->EXE总线
+    input      [170:0] ID_EXE_bus_r,// ID->EXE总线
     output             EXE_over,    // EXE模块执行完成
     output     [153:0] EXE_MEM_bus, // EXE->MEM总线
     
@@ -20,10 +20,10 @@ module exe(                         // 执行级
 );
 //-----{ID->EXE总线}begin
     //EXE需要用到的信息
-    wire multiply;            //乘法
+    wire mul_or_div;       //乘除
     wire mthi;             //MTHI
     wire mtlo;             //MTLO
-    wire [11:0] alu_control;
+    wire [15:0] alu_control;
     wire [31:0] alu_operand1;
     wire [31:0] alu_operand2;
 
@@ -44,7 +44,7 @@ module exe(                         // 执行级
     
     //pc
     wire [31:0] pc;
-    assign {multiply,
+    assign {mul_or_div,
             mthi,
             mtlo,
             alu_control,
@@ -66,35 +66,38 @@ module exe(                         // 执行级
 
 //-----{ALU}begin
     wire [31:0] alu_result;
+    wire [31:0] alu_result_lo;
 
     alu alu_module(
         .alu_control  (alu_control ),  // I, 12, ALU控制信号
         .alu_src1     (alu_operand1),  // I, 32, ALU操作数1
         .alu_src2     (alu_operand2),  // I, 32, ALU操作数2
-        .alu_result   (alu_result  )   // O, 32, ALU结果
+        .alu_result   (alu_result  ),   // O, 32, ALU结果
+        .alu_result_lo(alu_result_lo)  // O,32,乘法高32位或除法余数
     );
 //-----{ALU}end
 
-//-----{乘法器}begin
-    wire        mult_begin; 
-    wire [63:0] product; 
-    wire        mult_end;
+// //-----{乘法器}begin
+//     wire        mult_begin; 
+//     wire [63:0] product; 
+//     wire        mult_end;
     
-    assign mult_begin = multiply & EXE_valid;
-    multiply multiply_module (
-        .clk       (clk       ),
-        .mult_begin(mult_begin  ),
-        .mult_op1  (alu_operand1), 
-        .mult_op2  (alu_operand2),
-        .product   (product   ),
-        .mult_end  (mult_end  )
-    );
-//-----{乘法器}end
+//     assign mult_begin = multiply & EXE_valid;
+//     multiply multiply_module (
+//         .clk       (clk       ),
+//         .mult_begin(mult_begin  ),
+//         .mult_op1  (alu_operand1), 
+//         .mult_op2  (alu_operand2),
+//         .product   (product   ),
+//         .mult_end  (mult_end  )
+//     );
+// //-----{乘法器}end
 
 //-----{EXE执行完成}begin
     //对于ALU操作，都是1拍可完成，
     //但对于乘法操作，需要多拍完成
-    assign EXE_over = EXE_valid & (~multiply | mult_end);
+    // assign EXE_over = EXE_valid & (~multiply | mult_end);
+    assign EXE_over = EXE_valid;
 //-----{EXE执行完成}end
 
 //-----{EXE模块的dest值}begin
@@ -111,10 +114,11 @@ module exe(                         // 执行级
     //要写入LO的值放在lo_result里，包括MULT和MTLO指令,
     assign exe_result = mthi     ? alu_operand1 :
                         mtc0     ? alu_operand2 : 
-                        multiply ? product[63:32] : alu_result;
-    assign lo_result  = mtlo ? alu_operand1 : product[31:0];
-    assign hi_write   = multiply | mthi;
-    assign lo_write   = multiply | mtlo;
+                        // multiply ? product[63:32] : 
+                        alu_result;
+    assign lo_result  = mtlo ? alu_operand1 : alu_result_lo;
+    assign hi_write   = mul_or_div | mthi;
+    assign lo_write   = mul_or_div | mtlo;
     
     assign EXE_MEM_bus = {mem_control,store_data,          //load/store信息和store数据
                           exe_result,                      //exe运算结果

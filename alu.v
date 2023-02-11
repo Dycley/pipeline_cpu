@@ -1,18 +1,23 @@
 `timescale 1ns / 1ps
+`include "division.v"
+`include "multiply.v"
 //*************************************************************************
 //   > 文件名: alu.v
-//   > 描述  ：ALU模块，可做12种操作
-//   > 作者  : LOONGSON
-//   > 日期  : 2016-04-14
+//   > 描述  ：ALU模块，可做16种操作
 //*************************************************************************
 module alu(
-    input  [11:0] alu_control,  // ALU控制信号
+    input  [15:0] alu_control,  // ALU控制信号
     input  [31:0] alu_src1,     // ALU操作数1,为补码
     input  [31:0] alu_src2,     // ALU操作数2，为补码
-    output [31:0] alu_result    // ALU结果
+    output [31:0] alu_result,    // ALU结果
+    output [31:0] alu_result_lo  // 乘法高32位或除法的商 
     );
 
     // ALU控制信号，独热码
+    wire alu_divu;  //无符号字除
+    wire alu_div;   //有符号字除
+    wire alu_multu; //无符号字乘
+    wire alu_mult;  //有符号字乘
     wire alu_add;   //加法操作
     wire alu_sub;   //减法操作
     wire alu_slt;   //有符号比较，小于置位，复用加法器做减法
@@ -26,6 +31,10 @@ module alu(
     wire alu_sra;   //算术右移
     wire alu_lui;   //高位加载
 
+    assign alu_divu = alu_control[15];
+    assign alu_div  = alu_control[14];
+    assign alu_multu= alu_control[13];
+    assign alu_mult = alu_control[12];
     assign alu_add  = alu_control[11];
     assign alu_sub  = alu_control[10];
     assign alu_slt  = alu_control[ 9];
@@ -39,6 +48,8 @@ module alu(
     assign alu_sra  = alu_control[ 1];
     assign alu_lui  = alu_control[ 0];
 
+    wire [63:0] div_result;       //[63:32]余数，[31:0]商
+    wire [63:0] mul_result;
     wire [31:0] add_sub_result;
     wire [31:0] slt_result;
     wire [31:0] sltu_result;
@@ -151,8 +162,40 @@ module alu(
     assign sra_result = shf[4] ? {{16{sra_step2[31]}}, sra_step2[31:16]} : sra_step2;    // 若shf[4]="1",第二次移位结果右移16位,高位补符号位
 //-----{移位器}end
 
+    wire [31:0] mul_or_div_op1;
+    wire [31:0] mul_or_div_op2;
+    assign mul_or_div_op1 = alu_multu | alu_divu ? alu_src1 :
+                            alu_mult  | alu_div  ? (alu_src1[31] ? ~alu_src1+1 : alu_src1) :
+                            32'd0;
+    assign mul_or_div_op2 = alu_multu | alu_divu ? alu_src2 :
+                            alu_mult  | alu_div  ? (alu_src2[31] ? ~alu_src2+1 : alu_src2) :
+                            32'd0;
+//-----{乘法器}begin
+    wire [63:0] mul_result_ori;
+    multiply multiply_module(
+        .mult_op1(mul_or_div_op1),
+        .mult_op2(mul_or_div_op2),
+        .product(mul_result_ori)
+    );
+    assign mul_result = alu_mult & (alu_src1[31] ^ alu_src2[31]) ? (~mul_result_ori+1) :mul_result_ori;
+//-----{乘法器}end
+
+//-----{除法器}begin
+    wire [63:0] div_result_ori;
+    division division_module(
+        .dividend(mul_or_div_op1),
+        .divisor(mul_or_div_op2),
+        .shang(div_result_ori[31:0]),
+        .yushu(div_result_ori[63:32])
+    );
+    assign div_result = alu_div & (alu_src1[31] ^ alu_src2[31]) ? (~div_result_ori[31:0]+1) :div_result_ori[31:0];
+    assign div_result[63:32] = div_result_ori[63:32]; 
+//-----{除法器}end
+
     // 选择相应结果输出
     assign alu_result = (alu_add|alu_sub) ? add_sub_result[31:0] : 
+                        alu_mult          ? mul_result[31:0] :
+                        alu_div           ? div_result[31:0] :
                         alu_slt           ? slt_result :
                         alu_sltu          ? sltu_result :
                         alu_and           ? and_result :
@@ -164,4 +207,9 @@ module alu(
                         alu_sra           ? sra_result :
                         alu_lui           ? lui_result :
                         32'd0;
+                        
+    assign alu_result_lo = alu_mult       ? mul_result[63:32] : //高32位
+                        alu_div           ? div_result[63:32] : //余数
+                        32'd0;                 
+              
 endmodule
