@@ -17,7 +17,7 @@ module wb(                       // 写回级
 
      //5级流水新增接口
      input             clk,       // 时钟
-    input             resetn,    // 复位信号，低电平有效
+     input             resetn,    // 复位信号，低电平有效
      output [ 32:0] exc_bus,      // Exception pc总线
      output [  4:0] WB_wdest,     // WB级要写回寄存器堆的目标地址号
      output         cancel,       // syscall和eret到达写回级时会发出cancel信号，
