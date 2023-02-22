@@ -15,7 +15,7 @@ module decode(                      // 译码级
     output     [ 32:0] jbr_bus,     // 跳转总线
 //  output             inst_jbr,    // 指令为跳转分支指令,五级流水不需要
     output             ID_over,     // ID模块执行完成
-    output     [170:0] ID_EXE_bus,  // ID->EXE总线
+    output     [172:0] ID_EXE_bus,  // ID->EXE总线
     
     //5级流水新增
     input              IF_over,     //对于分支指令，需要该信号
@@ -168,8 +168,10 @@ module decode(                      // 译码级
     //load store
     wire inst_load;
     wire inst_store;
-    assign inst_load  = inst_LW | inst_LB | inst_LBU;  // load指令
-    assign inst_store = inst_SW | inst_SB;             // store指令
+    assign inst_load  = inst_LW | inst_LB | inst_LBU
+                        | inst_LH | inst_LHU | inst_LWL | inst_LWR;  // load指令
+    assign inst_store = inst_SW | inst_SB
+                        | inst_SH | inst_SWL | inst_SWR;             // store指令
     
     //alu操作分类
     wire inst_add, inst_sub, inst_slt,inst_sltu;
@@ -325,12 +327,16 @@ module decode(                      // 译码级
                           inst_sra,
                           inst_lui};
     //访存需要用到的load/store信息
-    wire lb_sign;  //load一字节为有符号load
-    wire ls_word;  //load/store为字节还是字,0:byte;1:word
-    wire [3:0] mem_control;  //MEM需要使用的控制信号
+    wire lb_sign;  // load一字节为有符号load
+    wire [2:0]ls_word;  // load/store为字节数,0:byte;1:word;2:helf of a word;3:word left;4:word right
+    wire [5:0] mem_control;  //MEM需要使用的控制信号
     wire [31:0] store_data;  //store操作的存的数据
-    assign lb_sign = inst_LB;
-    assign ls_word = inst_LW | inst_SW;
+    assign lb_sign = inst_LB | inst_LH;
+    assign ls_word = inst_LW | inst_SW ? 3'd1:
+                     inst_LH | inst_LHU | inst_SH ? 3'd2:
+                     inst_LWL |inst_SWL ? 3'd3:
+                     inst_LWR |inst_SWR ? 3'd4:
+                     3'd0;
     assign mem_control = {inst_load,
                           inst_store,
                           ls_word,

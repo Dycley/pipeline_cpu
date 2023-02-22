@@ -7,9 +7,9 @@
 //*************************************************************************
 module exe(                         // 执行级
     input              EXE_valid,   // 执行级有效信号
-    input      [170:0] ID_EXE_bus_r,// ID->EXE总线
+    input      [172:0] ID_EXE_bus_r,// ID->EXE总线
     output             EXE_over,    // EXE模块执行完成
-    output     [153:0] EXE_MEM_bus, // EXE->MEM总线
+    output     [155:0] EXE_MEM_bus, // EXE->MEM总线
     
      //5级流水新增
      input             clk,       // 时钟
@@ -28,7 +28,7 @@ module exe(                         // 执行级
     wire [31:0] alu_operand2;
 
     //访存需要用到的load/store信息
-    wire [3:0] mem_control;  //MEM需要使用的控制信号
+    wire [5:0] mem_control;  //MEM需要使用的控制信号
     wire [31:0] store_data;  //store操作的存的数据
                           
     //写回需要用到的信息

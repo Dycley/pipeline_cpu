@@ -68,8 +68,8 @@ module wb(                       // 写回级
 //-----{MEM->WB总线}end
 
 //-----{HI/LO寄存器}begin
-    //HI用于存放乘法结果的高32位
-    //LO用于存放乘法结果的低32位
+    //HI用于存放乘法结果的高32位或除法的余数
+    //LO用于存放乘法结果的低32位或除法的商
     reg [31:0] hi;
     reg [31:0] lo;
     
@@ -143,8 +143,32 @@ module wb(                       // 写回级
    begin
        if (syscall)
        begin
-           cause_exc_code_r <= 5'd8;
+           cause_exc_code_r <= 5'd8;        // 系统调用例外
        end
+    //    else if(break)
+    //    begin
+    //         cause_exc_code_r <=5'd0;        // 中断
+    //    end
+    //    else if(adel)
+    //    begin
+    //         cause_exc_code_r <=5'd4;        // 地址错例外（读数据或取指令）
+    //    end
+    //    else if(ades)
+    //    begin
+    //         cause_exc_code_r <=5'd5;        // 地址错例外（写数据）
+    //    end
+    //    else if(bp)
+    //    begin
+    //         cause_exc_code_r <=5'd9;        // 断点例外
+    //    end
+    //    else if(ri)
+    //    begin
+    //         cause_exc_code_r <=5'd10;       // 保留指令例外
+    //    end
+    //    else if(ov)
+    //    begin
+    //         cause_exc_code_r <=5'd12;       // 算出溢出例外
+    //    end
    end
    
    //EPC寄存器

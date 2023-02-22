@@ -8,7 +8,7 @@
 module mem(                          // 访存级
     input              clk,          // 时钟
     input              MEM_valid,    // 访存级有效信号
-    input      [153:0] EXE_MEM_bus_r,// EXE->MEM总线
+    input      [155:0] EXE_MEM_bus_r,// EXE->MEM总线
     input      [ 31:0] dm_rdata,     // 访存读数据
     output     [ 31:0] dm_addr,      // 访存读写地址
     output reg [  3:0] dm_wen,       // 访存写使能
@@ -25,7 +25,7 @@ module mem(                          // 访存级
 );
 //-----{EXE->MEM总线}begin
     //访存需要用到的load/store信息
-    wire [3 :0] mem_control;  //MEM需要使用的控制信号
+    wire [5 :0] mem_control;  //MEM需要使用的控制信号
     wire [31:0] store_data;   //store操作的存的数据
     
     //EXE结果和HI/LO数据
@@ -80,11 +80,19 @@ module mem(                          // 访存级
     begin
         if (MEM_valid && inst_store) // 访存级有效时,且为store操作
         begin
-            if (ls_word)
-            begin
-                dm_wen <= 4'b1111; // 存储字指令，写使能全1
+            if (ls_word[2:0] == 3'd1)
+            begin  // SW指令
+                if(dm_addr[1:0])
+                begin
+                    // 地址最低 2 位不为 0，触发地址错例外ades
+                    dm_wen <= 4'b0000;
+                end
+                else
+                begin
+                    dm_wen <= 4'b1111; // 存储字指令，写使能全1
+                end
             end
-            else
+            else if(ls_word[2:0] == 3'd0)
             begin // SB指令，需要依据地址底两位，确定对应的写使能
                 case (dm_addr[1:0])
                     2'b00   : dm_wen <= 4'b0001;
@@ -94,6 +102,26 @@ module mem(                          // 访存级
                     default : dm_wen <= 4'b0000;
                 endcase
             end
+            else if(ls_word[2:0] == 3'd2)
+            begin // SH指令，需要依据地址底两位，确定对应的写使能
+                if(dm_addr[0])
+                begin
+                    // 地址最低 1 位不为 0，触发地址错例外ades
+                    dm_wen <= 4'b0000;
+                end
+                else
+                begin
+                    case (dm_addr[1])
+                        1'b0   : dm_wen <= 4'b0011;
+                        1'b1   : dm_wen <= 4'b1100;
+                        default : dm_wen <= 4'b0000;
+                    endcase
+                end
+            end
+            else
+            begin
+                dm_wen <= 4'b1111; // 存储字指令，写使能全1  swl,swr
+            end
         end
         else
         begin
@@ -102,15 +130,54 @@ module mem(                          // 访存级
     end 
     
     //store操作的写数据
-    always @ (*)  // 对于SB指令，需要依据地址底两位，移动store的字节至对应位置
+    always @ (*)  
     begin
-        case (dm_addr[1:0])
-            2'b00   : dm_wdata <= store_data;
-            2'b01   : dm_wdata <= {16'd0, store_data[7:0], 8'd0};
-            2'b10   : dm_wdata <= {8'd0, store_data[7:0], 16'd0};
-            2'b11   : dm_wdata <= {store_data[7:0], 24'd0};
-            default : dm_wdata <= store_data;
+        case (ls_word[2:0])
+            3'd0:       // 对于SB指令，需要依据地址底两位，移动store的字节至对应位置
+            begin
+                case (dm_addr[1:0])
+                    2'b00   : dm_wdata <= store_data;
+                    2'b01   : dm_wdata <= {16'd0, store_data[7:0], 8'd0};
+                    2'b10   : dm_wdata <= {8'd0, store_data[7:0], 16'd0};
+                    2'b11   : dm_wdata <= {store_data[7:0], 24'd0};
+                    default : dm_wdata <= store_data;
+                endcase
+            end
+            3'd1:       // SW
+            begin
+                dm_wdata <= store_data;
+            end
+            3'd2:       // SH
+            begin
+                case (dm_addr[1])
+                    1'b0   : dm_wdata <= {16'd0,store_data[15:0]};
+                    1'b1   : dm_wdata <= {store_data[7:0], 16'd0};
+                    default : dm_wdata <= store_data;
+                endcase
+            end
+            3'd3:       // SWL
+            begin
+                case (dm_addr[1:0])
+                    2'b00   : dm_wdata <= {store_data[23:0], 8'd0};
+                    2'b01   : dm_wdata <= {store_data[15:0], 16'd0};
+                    2'b10   : dm_wdata <= {store_data[7:0], 24'd0};
+                    2'b11   : dm_wdata <= {32'd0};
+                    default : dm_wdata <= store_data
+                endcase
+            end
+            3'd4:       // SWR
+            begin
+                case (dm_addr[1:0])
+                    2'b00   : dm_wdata <= {32'd0};
+                    2'b01   : dm_wdata <= {24'd0, store_data[7:0]};
+                    2'b10   : dm_wdata <= {16'd0, store_data[15:0]};
+                    2'b11   : dm_wdata <= {8'd0, store_data[23:0]};
+                    default : dm_wdata <= store_data;
+                endcase
+            end
+            default: dm_wdata <= store_data;
         endcase
+        
     end
     
      //load读出的数据
