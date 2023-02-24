@@ -68,7 +68,7 @@ module mem(                          // 访存级
 //-----{load/store访存}begin
     wire inst_load;  //load操作
     wire inst_store; //store操作
-    wire ls_word;    //load/store为字节还是字,0:byte;1:word
+    wire [2:0] ls_word;    //load/store为字节还是字,0:byte;1:word
     wire lb_sign;    //load一字节为有符号load
     assign {inst_load,inst_store,ls_word,lb_sign} = mem_control;
 
@@ -80,53 +80,66 @@ module mem(                          // 访存级
     begin
         if (MEM_valid && inst_store) // 访存级有效时,且为store操作
         begin
-            if (ls_word[2:0] == 3'd1)
-            begin  // SW指令
-                if(dm_addr[1:0])
-                begin
-                    // 地址最低 2 位不为 0，触发地址错例外ades
-                    dm_wen <= 4'b0000;
+            case (ls_word[2:0])
+                3'd0:       // SB
+                    begin // SB指令，需要依据地址底两位，确定对应的写使能
+                        case (dm_addr[1:0])
+                            2'b00   : dm_wen <= 4'b0001;
+                            2'b01   : dm_wen <= 4'b0010;
+                            2'b10   : dm_wen <= 4'b0100;
+                            2'b11   : dm_wen <= 4'b1000;
+                            default : dm_wen <= 4'b0000;
+                        endcase
+                    end
+                3'd1:       // SW
+                begin  // SW指令
+                    if(dm_addr[1:0])
+                    begin
+                        $display("Error: unaligned address!");
+                        // ades <= 1;// 地址最低 2 位不为 0，触发地址错例外ades
+                        dm_wen <= 4'b0000;
+                    end
+                    else
+                    begin
+                        dm_wen <= 4'b1111; // 存储字指令，写使能全1
+                    end
                 end
-                else
-                begin
-                    dm_wen <= 4'b1111; // 存储字指令，写使能全1
-                end
-            end
-            else if(ls_word[2:0] == 3'd0)
-            begin // SB指令，需要依据地址底两位，确定对应的写使能
-                case (dm_addr[1:0])
-                    2'b00   : dm_wen <= 4'b0001;
-                    2'b01   : dm_wen <= 4'b0010;
-                    2'b10   : dm_wen <= 4'b0100;
-                    2'b11   : dm_wen <= 4'b1000;
-                    default : dm_wen <= 4'b0000;
-                endcase
-            end
-            else if(ls_word[2:0] == 3'd2)
-            begin // SH指令，需要依据地址底两位，确定对应的写使能
-                if(dm_addr[0])
-                begin
-                    // 地址最低 1 位不为 0，触发地址错例外ades
-                    dm_wen <= 4'b0000;
-                end
-                else
-                begin
-                    case (dm_addr[1])
-                        1'b0   : dm_wen <= 4'b0011;
-                        1'b1   : dm_wen <= 4'b1100;
+                3'd2:       // SH
+                    begin // SH指令，需要依据地址底两位，确定对应的写使能
+                        if(dm_addr[0])
+                        begin
+                            $display("Error: unaligned address!");
+                            // ades <= 1;// 地址最低 1 位不为 0，触发地址错例外ades
+                            dm_wen <= 4'b0000;
+                        end
+                        else
+                        begin
+                            case (dm_addr[1])
+                                1'b0   : dm_wen <= 4'b0011;
+                                1'b1   : dm_wen <= 4'b1100;
+                                default : dm_wen <= 4'b0000;
+                            endcase
+                        end
+                    end
+                3'd3:       // SWL
+                    case (dm_addr[1:0])
+                        2'b00   : dm_wen <= 4'b1000;
+                        2'b01   : dm_wen <= 4'b1100;
+                        2'b10   : dm_wen <= 4'b1110;
+                        2'b11   : dm_wen <= 4'b1111;
                         default : dm_wen <= 4'b0000;
                     endcase
-                end
-            end
-            else
-            begin
-                dm_wen <= 4'b1111; // 存储字指令，写使能全1  swl,swr
-            end
-        end
-        else
-        begin
-            dm_wen <= 4'b0000;
-        end
+                3'd4:       // SWR
+                    case (dm_addr[1:0])
+                        2'b00   : dm_wen <= 4'b1111;
+                        2'b01   : dm_wen <= 4'b0111;
+                        2'b10   : dm_wen <= 4'b0011;
+                        2'b11   : dm_wen <= 4'b0001;
+                        default : dm_wen <= 4'b0000;
+                    endcase
+                default: dm_wen <= 4'b0000;
+            endcase
+        end   
     end 
     
     //store操作的写数据
@@ -158,20 +171,20 @@ module mem(                          // 访存级
             3'd3:       // SWL
             begin
                 case (dm_addr[1:0])
-                    2'b00   : dm_wdata <= {store_data[23:0], 8'd0};
-                    2'b01   : dm_wdata <= {store_data[15:0], 16'd0};
-                    2'b10   : dm_wdata <= {store_data[7:0], 24'd0};
-                    2'b11   : dm_wdata <= {32'd0};
-                    default : dm_wdata <= store_data
+                    2'b00   : dm_wdata <= {dm_rdata[31:8], store_data[31:24]};
+                    2'b01   : dm_wdata <= {dm_rdata[31:16], store_data[31:16]};
+                    2'b10   : dm_wdata <= {dm_rdata[31:24], store_data[31:8]};
+                    2'b11   : dm_wdata <= {store_data[31:0]};
+                    default : dm_wdata <= store_data;
                 endcase
             end
             3'd4:       // SWR
             begin
                 case (dm_addr[1:0])
-                    2'b00   : dm_wdata <= {32'd0};
-                    2'b01   : dm_wdata <= {24'd0, store_data[7:0]};
-                    2'b10   : dm_wdata <= {16'd0, store_data[15:0]};
-                    2'b11   : dm_wdata <= {8'd0, store_data[23:0]};
+                    2'b00   : dm_wdata <= {store_data[31:0]};
+                    2'b01   : dm_wdata <= {store_data[23:0],dm_rdata[7:0]};
+                    2'b10   : dm_wdata <= {store_data[15:0],dm_rdata[15:0]};
+                    2'b11   : dm_wdata <= {store_data[7:0],dm_rdata[23:0]};
                     default : dm_wdata <= store_data;
                 endcase
             end
@@ -180,17 +193,66 @@ module mem(                          // 访存级
         
     end
     
-     //load读出的数据
-     wire        load_sign;
-     wire [31:0] load_result;
-    assign load_sign = (dm_addr[1:0]==2'd0) ? dm_rdata[ 7] :
-                       (dm_addr[1:0]==2'd1) ? dm_rdata[15] :
-                       (dm_addr[1:0]==2'd2) ? dm_rdata[23] : dm_rdata[31] ;
-     assign load_result[7:0] = (dm_addr[1:0]==2'd0) ? dm_rdata[ 7:0 ] :
-                               (dm_addr[1:0]==2'd1) ? dm_rdata[15:8 ] :
-                               (dm_addr[1:0]==2'd2) ? dm_rdata[23:16] :
-                                                      dm_rdata[31:24] ;
-     assign load_result[31:8]= ls_word ? dm_rdata[31:8] : {24{lb_sign & load_sign}};
+    //load读出的数据
+    // wire        load_sign;
+    reg [31:0] load_result;
+    always @(*) begin
+        case (ls_word[2:0])
+            3'd0:       // LB/LBU
+                case (dm_addr[1:0])
+                    2'd0: load_result <= {{24{lb_sign & dm_rdata[7]}}, dm_rdata[ 7:0 ]};
+                    2'd1: load_result <= {{24{lb_sign & dm_rdata[15]}}, dm_rdata[15:8 ]};
+                    2'd2: load_result <= {{24{lb_sign & dm_rdata[23]}}, dm_rdata[23:16]};
+                    default: load_result <= {{24{lb_sign & dm_rdata[31]}}, dm_rdata[31:24]};
+                endcase
+            3'd1:       // LW
+                if (dm_addr[1:0] == 2'b0) begin
+                    // 根据地址的第二位来确定从存储器中读取哪两个字节，并扩展到32位
+                    load_result <= dm_rdata;               
+                end else begin
+                    // 地址不对齐，报错或异常处理
+                    $display("Error: unaligned address!");
+                end 
+            3'd2:       // LH/LHU
+                if (dm_addr[0] == 1'b0) begin
+                    // 根据地址的第二位来确定从存储器中读取哪两个字节，并扩展到32位
+                    case (dm_addr[1])
+                        1'b0: load_result <= {{16{dm_rdata[15] & lb_sign}} , dm_rdata[15:0]}; // 读取低两个字节并符号扩展
+                        1'b1: load_result <= {{16{dm_rdata[31] & lb_sign}} , dm_rdata[31:16]}; // 读取高两个字节并符号扩展
+                    endcase 
+                end else begin
+                    // 地址不对齐，报错或异常处理
+                    $display("Error: unaligned address!");
+                end 
+            3'd3:       // LWL
+                case (dm_addr[1:0])
+                    2'd0: load_result <= {dm_rdata[ 7:0 ], store_data[23:0]};
+                    2'd1: load_result <= {dm_rdata[15:0 ], store_data[15:0]};
+                    2'd2: load_result <= {dm_rdata[23:0 ], store_data[7:0] };
+                    default: load_result <= {dm_rdata[31:0]};
+                endcase
+            3'd4:       // LWR
+                case (dm_addr)
+                    2'd0: load_result <= {dm_rdata[31:0 ]};
+                    2'd1: load_result <= {store_data[31:24], dm_rdata[31:8]};
+                    2'd2: load_result <= {store_data[31:16], dm_rdata[31:16]};
+                    default: load_result <= {store_data[31:8], dm_rdata[31:24]};
+                endcase
+            default: load_result <= dm_rdata; 
+        endcase
+    end
+    // assign load_sign = ls_word[2:0] == 3'd0 ? 
+    //                         ((dm_addr[1:0]==2'd0) ? dm_rdata[ 7] :
+    //                         (dm_addr[1:0]==2'd1) ? dm_rdata[15] :
+    //                         (dm_addr[1:0]==2'd2) ? dm_rdata[23] : dm_rdata[31]):
+    //                         (dm[1] == 1'b0 ? dm_rdata[15] : dm_rdata[31]);
+    // assign load_result[7:0] = (dm_addr[1:0]==2'd0) ? dm_rdata[ 7:0 ] :
+    //                           (dm_addr[1:0]==2'd1) ? dm_rdata[15:8 ] :
+    //                           (dm_addr[1:0]==2'd2) ? dm_rdata[23:16] :
+    //                                                  dm_rdata[31:24] ;
+    // assign load_result[31:8]= ls_word[2:0] == 3'd1 ? dm_rdata[31:8] :           // LW
+    //                           ls_word[2:0] == 3'd0 ?{24{lb_sign & load_sign}}:  // LB/LBU
+    //                           ;
 //-----{load/store访存}end
 
 //-----{MEM执行完成}begin
