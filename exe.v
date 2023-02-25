@@ -7,9 +7,9 @@
 //*************************************************************************
 module exe(                         // 执行级
     input              EXE_valid,   // 执行级有效信号
-    input      [172:0] ID_EXE_bus_r,// ID->EXE总线
+    input      [173:0] ID_EXE_bus_r,// ID->EXE总线
     output             EXE_over,    // EXE模块执行完成
-    output     [155:0] EXE_MEM_bus, // EXE->MEM总线
+    output     [156:0] EXE_MEM_bus, // EXE->MEM总线
     
      //5级流水新增
      input             clk,       // 时钟
@@ -39,6 +39,7 @@ module exe(                         // 执行级
     wire [7 :0] cp0r_addr;
     wire       syscall;   //syscall和eret在写回级有特殊的操作 
     wire       eret;
+    wire       break;
     wire       rf_wen;    //写回的寄存器写使能
     wire [4:0] rf_wdest;  //写回的目的寄存器
     
@@ -61,7 +62,8 @@ module exe(                         // 执行级
             eret,
             rf_wen,
             rf_wdest,
-            pc          } = ID_EXE_bus_r;
+            pc,
+            break          } = ID_EXE_bus_r;
 //-----{ID->EXE总线}end
 
 //-----{ALU}begin
@@ -127,7 +129,8 @@ module exe(                         // 执行级
                           mfhi,mflo,                       //WB需用的信号,新增
                           mtc0,mfc0,cp0r_addr,syscall,eret,//WB需用的信号,新增
                           rf_wen,rf_wdest,                 //WB需用的信号
-                          pc};                             //PC
+                          pc,                              //PC
+                          break};                          //WB需用的信号,新增
 //-----{EXE->MEM总线}end
 
 //-----{展示EXE模块的PC值}begin

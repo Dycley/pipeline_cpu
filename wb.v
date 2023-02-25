@@ -9,7 +9,7 @@
                                  // 此处实现的Exception只有SYSCALL
 module wb(                       // 写回级
     input          WB_valid,     // 写回级有效
-    input  [117:0] MEM_WB_bus_r, // MEM->WB总线
+    input  [118:0] MEM_WB_bus_r, // MEM->WB总线
     output         rf_wen,       // 寄存器写使能
     output [  4:0] rf_wdest,     // 寄存器写地址
     output [ 31:0] rf_wdata,     // 寄存器写数据
@@ -48,6 +48,7 @@ module wb(                       // 写回级
     wire [7 :0] cp0r_addr;
     wire       syscall;   //syscall和eret在写回级有特殊的操作 
     wire       eret;
+    wire       break;
     
     //pc
     wire [31:0] pc;    
@@ -64,7 +65,8 @@ module wb(                       // 写回级
             cp0r_addr,
             syscall,
             eret,
-            pc} = MEM_WB_bus_r;
+            pc,
+            break} = MEM_WB_bus_r;
 //-----{MEM->WB总线}end
 
 //-----{HI/LO寄存器}begin
@@ -124,7 +126,7 @@ module wb(                       // 写回级
        begin
            status_exl_r <= 1'b0;
        end
-       else if (syscall)
+       else if (syscall | break) 
        begin
            status_exl_r <= 1'b1;
        end
@@ -145,7 +147,7 @@ module wb(                       // 写回级
        begin
            cause_exc_code_r <= 5'd8;        // 系统调用例外
        end
-    //    else if(break)
+    //    else if(int)
     //    begin
     //         cause_exc_code_r <=5'd0;        // 中断
     //    end
@@ -157,10 +159,10 @@ module wb(                       // 写回级
     //    begin
     //         cause_exc_code_r <=5'd5;        // 地址错例外（写数据）
     //    end
-    //    else if(bp)
-    //    begin
-    //         cause_exc_code_r <=5'd9;        // 断点例外
-    //    end
+       else if(break)
+       begin
+            cause_exc_code_r <=5'd9;        // 断点例外
+       end
     //    else if(ri)
     //    begin
     //         cause_exc_code_r <=5'd10;       // 保留指令例外

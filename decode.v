@@ -15,7 +15,7 @@ module decode(                      // 译码级
     output     [ 32:0] jbr_bus,     // 跳转总线
 //  output             inst_jbr,    // 指令为跳转分支指令,五级流水不需要
     output             ID_over,     // ID模块执行完成
-    output     [172:0] ID_EXE_bus,  // ID->EXE总线
+    output     [173:0] ID_EXE_bus,  // ID->EXE总线
     
     //5级流水新增
     input              IF_over,     //对于分支指令，需要该信号
@@ -65,14 +65,13 @@ module decode(                      // 译码级
     wire inst_ANDI, inst_ORI  , inst_XORI, inst_JAL;
     wire inst_MULT, inst_MFLO , inst_MFHI, inst_MTLO;
     wire inst_MTHI, inst_MFC0 , inst_MTC0;
-    wire inst_ADD , inst_ADDI , inst_SUB ; // 新增16条指令
+    wire inst_ERET, inst_SYSCALL;
+    wire inst_ADD , inst_ADDI , inst_SUB ;              // 新增16条指令
     wire inst_DIV , inst_DIVU , inst_MULTU,inst_BGEZAL;
     wire inst_BLTZAL,inst_LH  , inst_LHU , inst_LWL;
     wire inst_LWR , inst_SH   , inst_SWL , inst_SWR;
     wire inst_BREAK;
 
-
-    wire inst_ERET, inst_SYSCALL;
     wire op_zero;  // 操作码全0
     wire sa_zero;  // sa域全0
     assign op_zero = ~(|op);
@@ -223,11 +222,13 @@ module decode(                      // 译码级
     //依据源寄存器号分类
     wire inst_no_rs;  //指令rs域非0，且不是从寄存器堆读rs的数据
     wire inst_no_rt;  //指令rt域非0，且不是从寄存器堆读rt的数据
-    assign inst_no_rs = inst_MTC0 | inst_SYSCALL | inst_ERET;
+    assign inst_no_rs = inst_MTC0 | inst_SYSCALL | inst_ERET
+                      | inst_BREAK;
     assign inst_no_rt = inst_ADDIU | inst_SLTI | inst_SLTIU
                       | inst_BGEZ  | inst_load | inst_imm_zero
                       | inst_J     | inst_JAL  | inst_MFC0
-                      | inst_SYSCALL | inst_ADDI;                                  ///   待修改
+                      | inst_SYSCALL| inst_ADDI | inst_BGEZAL
+                      | inst_BLTZAL | inst_BREAK ;                                  ///   待修改
 //-----{指令译码}end
 
 //-----{分支指令执行}begin
@@ -349,10 +350,12 @@ module decode(                      // 译码级
     wire mfc0;
     wire [7 :0] cp0r_addr;
     wire       syscall;   //syscall和eret在写回级有特殊的操作 
+    wire       break;
     wire       eret;
     wire       rf_wen;    //写回的寄存器写使能
     wire [4:0] rf_wdest;  //写回的目的寄存器
     assign syscall  = inst_SYSCALL;
+    assign break    = inst_BREAK;
     assign eret     = inst_ERET;
     assign mfhi     = inst_MFHI;
     assign mflo     = inst_MFLO;
@@ -370,7 +373,8 @@ module decode(                      // 译码级
                          mfhi,mflo,                            //WB需用的信号,新增
                          mtc0,mfc0,cp0r_addr,syscall,eret,     //WB需用的信号,新增
                          rf_wen, rf_wdest,                     //WB需用的信号
-                         pc};                                  //PC值
+                         pc,                                    //PC值
+                         break}; 
 //-----{ID->EXE总线}end
 
 //-----{展示ID模块的PC值}begin

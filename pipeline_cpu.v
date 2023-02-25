@@ -1,10 +1,12 @@
 `timescale 1ns / 1ps
 //*************************************************************************
 //   > 文件名: pipeline_cpu.v
-//   > 描述  :五级流水CPU模块，共实现XX条指令
+//   > 描述  :五级流水CPU模块，共实现61条指令
 //   >        指令rom和数据ram均实例化xilinx IP得到，为同步读写
 //   > 作者  : LOONGSON
 //   > 日期  : 2016-04-14
+//   > 修改  ：YokDen
+//   > 修改日期 ：2023-02-25
 //*************************************************************************
 module pipeline_cpu(  // 多周期cpu
     input clk,           // 时钟
@@ -130,14 +132,14 @@ module pipeline_cpu(  // 多周期cpu
 //--------------------------{5级间的总线}begin---------------------------//
     wire [ 63:0] IF_ID_bus;   // IF->ID级总线
     wire [172:0] ID_EXE_bus;  // ID->EXE级总线
-    wire [155:0] EXE_MEM_bus; // EXE->MEM级总线
-    wire [117:0] MEM_WB_bus;  // MEM->WB级总线
+    wire [156:0] EXE_MEM_bus; // EXE->MEM级总线
+    wire [118:0] MEM_WB_bus;  // MEM->WB级总线
     
     //锁存以上总线信号
     reg [ 63:0] IF_ID_bus_r;
     reg [172:0] ID_EXE_bus_r;
-    reg [155:0] EXE_MEM_bus_r;
-    reg [117:0] MEM_WB_bus_r;
+    reg [156:0] EXE_MEM_bus_r;
+    reg [118:0] MEM_WB_bus_r;
     
     //IF到ID的锁存信号
     always @(posedge clk)

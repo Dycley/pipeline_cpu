@@ -8,13 +8,13 @@
 module mem(                          // 访存级
     input              clk,          // 时钟
     input              MEM_valid,    // 访存级有效信号
-    input      [155:0] EXE_MEM_bus_r,// EXE->MEM总线
+    input      [156:0] EXE_MEM_bus_r,// EXE->MEM总线
     input      [ 31:0] dm_rdata,     // 访存读数据
     output     [ 31:0] dm_addr,      // 访存读写地址
     output reg [  3:0] dm_wen,       // 访存写使能
     output reg [ 31:0] dm_wdata,     // 访存写数据
     output             MEM_over,     // MEM模块执行完成
-    output     [117:0] MEM_WB_bus,   // MEM->WB总线
+    output     [118:0] MEM_WB_bus,   // MEM->WB总线
     
     //5级流水新增接口
     input              MEM_allow_in, // MEM级允许下级进入
@@ -42,6 +42,7 @@ module mem(                          // 访存级
     wire [7 :0] cp0r_addr;
     wire       syscall;   //syscall和eret在写回级有特殊的操作 
     wire       eret;
+    wire       break;
     wire       rf_wen;    //写回的寄存器写使能
     wire [4:0] rf_wdest;  //写回的目的寄存器
     
@@ -62,7 +63,8 @@ module mem(                          // 访存级
             eret,
             rf_wen,
             rf_wdest,
-            pc         } = EXE_MEM_bus_r;  
+            pc,
+            break         } = EXE_MEM_bus_r;  
 //-----{EXE->MEM总线}end
 
 //-----{load/store访存}begin
@@ -289,11 +291,12 @@ module mem(                          // 访存级
     
     assign MEM_WB_bus = {rf_wen,rf_wdest,                   // WB需要使用的信号
                          mem_result,                        // 最终要写回寄存器的数据
-                         lo_result,                         // 乘法低32位结果，新增
+                         lo_result,                         // 乘法低32位结果或除法的商，新增
                          hi_write,lo_write,                 // HI/LO写使能，新增
                          mfhi,mflo,                         // WB需要使用的信号,新增
                          mtc0,mfc0,cp0r_addr,syscall,eret,  // WB需要使用的信号,新增
-                         pc};                               // PC值
+                         pc,                                // PC值
+                         break};                            // WB需要使用的信号,新增
 //-----{MEM->WB总线}begin
 
 //-----{展示MEM模块的PC值}begin
