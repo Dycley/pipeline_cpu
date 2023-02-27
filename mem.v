@@ -2,19 +2,17 @@
 //*************************************************************************
 //   > 文件名: mem.v
 //   > 描述  :五级流水CPU的访存模块
-//   > 作者  : LOONGSON
-//   > 日期  : 2016-04-14
 //*************************************************************************
 module mem(                          // 访存级
     input              clk,          // 时钟
     input              MEM_valid,    // 访存级有效信号
-    input      [156:0] EXE_MEM_bus_r,// EXE->MEM总线
+    input      [157:0] EXE_MEM_bus_r,// EXE->MEM总线
     input      [ 31:0] dm_rdata,     // 访存读数据
     output     [ 31:0] dm_addr,      // 访存读写地址
     output reg [  3:0] dm_wen,       // 访存写使能
     output reg [ 31:0] dm_wdata,     // 访存写数据
     output             MEM_over,     // MEM模块执行完成
-    output     [118:0] MEM_WB_bus,   // MEM->WB总线
+    output     [153:0] MEM_WB_bus,   // MEM->WB总线
     
     //5级流水新增接口
     input              MEM_allow_in, // MEM级允许下级进入
@@ -45,6 +43,7 @@ module mem(                          // 访存级
     wire       break;
     wire       rf_wen;    //写回的寄存器写使能
     wire [4:0] rf_wdest;  //写回的目的寄存器
+    wire ov;              //算出例外
     
     //pc
     wire [31:0] pc;    
@@ -64,8 +63,12 @@ module mem(                          // 访存级
             rf_wen,
             rf_wdest,
             pc,
-            break         } = EXE_MEM_bus_r;  
+            break,
+            ov         } = EXE_MEM_bus_r;  
 //-----{EXE->MEM总线}end
+
+reg adel;           // 地址错例外（读数据或取指令）
+reg ades;           // 地址错例外（写数据）
 
 //-----{load/store访存}begin
     wire inst_load;  //load操作
@@ -85,6 +88,7 @@ module mem(                          // 访存级
             case (ls_word[2:0])
                 3'd0:       // SB
                     begin // SB指令，需要依据地址底两位，确定对应的写使能
+                        ades <=0;
                         case (dm_addr[1:0])
                             2'b00   : dm_wen <= 4'b0001;
                             2'b01   : dm_wen <= 4'b0010;
@@ -97,12 +101,12 @@ module mem(                          // 访存级
                 begin  // SW指令
                     if(dm_addr[1:0])
                     begin
-                        $display("Error: unaligned address!");
-                        // ades <= 1;// 地址最低 2 位不为 0，触发地址错例外ades
+                        ades <= 1;// 地址最低 2 位不为 0，触发地址错例外ades
                         dm_wen <= 4'b0000;
                     end
                     else
                     begin
+                        ades<=0;
                         dm_wen <= 4'b1111; // 存储字指令，写使能全1
                     end
                 end
@@ -110,12 +114,12 @@ module mem(                          // 访存级
                     begin // SH指令，需要依据地址底两位，确定对应的写使能
                         if(dm_addr[0])
                         begin
-                            $display("Error: unaligned address!");
-                            // ades <= 1;// 地址最低 1 位不为 0，触发地址错例外ades
+                            ades <= 1;// 地址最低 1 位不为 0，触发地址错例外ades
                             dm_wen <= 4'b0000;
                         end
                         else
                         begin
+                            ades<=0;
                             case (dm_addr[1])
                                 1'b0   : dm_wen <= 4'b0011;
                                 1'b1   : dm_wen <= 4'b1100;
@@ -124,23 +128,33 @@ module mem(                          // 访存级
                         end
                     end
                 3'd3:       // SWL
-                    case (dm_addr[1:0])
-                        2'b00   : dm_wen <= 4'b1000;
-                        2'b01   : dm_wen <= 4'b1100;
-                        2'b10   : dm_wen <= 4'b1110;
-                        2'b11   : dm_wen <= 4'b1111;
-                        default : dm_wen <= 4'b0000;
-                    endcase
+                    begin
+                        ades<=0;
+                        case (dm_addr[1:0])
+                            2'b00   : dm_wen <= 4'b1000;
+                            2'b01   : dm_wen <= 4'b1100;
+                            2'b10   : dm_wen <= 4'b1110;
+                            2'b11   : dm_wen <= 4'b1111;
+                            default : dm_wen <= 4'b0000;
+                        endcase
+                    end
                 3'd4:       // SWR
-                    case (dm_addr[1:0])
-                        2'b00   : dm_wen <= 4'b1111;
-                        2'b01   : dm_wen <= 4'b0111;
-                        2'b10   : dm_wen <= 4'b0011;
-                        2'b11   : dm_wen <= 4'b0001;
-                        default : dm_wen <= 4'b0000;
-                    endcase
+                    begin
+                        ades<=0;
+                        case (dm_addr[1:0])
+                            2'b00   : dm_wen <= 4'b1111;
+                            2'b01   : dm_wen <= 4'b0111;
+                            2'b10   : dm_wen <= 4'b0011;
+                            2'b11   : dm_wen <= 4'b0001;
+                            default : dm_wen <= 4'b0000;
+                        endcase
+                    end
                 default: dm_wen <= 4'b0000;
             endcase
+        end
+        else
+        begin
+            ades <= 0;
         end   
     end 
     
@@ -201,19 +215,23 @@ module mem(                          // 访存级
     always @(*) begin
         case (ls_word[2:0])
             3'd0:       // LB/LBU
+            begin
+                adel <= 0;
                 case (dm_addr[1:0])
                     2'd0: load_result <= {{24{lb_sign & dm_rdata[7]}}, dm_rdata[ 7:0 ]};
                     2'd1: load_result <= {{24{lb_sign & dm_rdata[15]}}, dm_rdata[15:8 ]};
                     2'd2: load_result <= {{24{lb_sign & dm_rdata[23]}}, dm_rdata[23:16]};
                     default: load_result <= {{24{lb_sign & dm_rdata[31]}}, dm_rdata[31:24]};
                 endcase
+            end
             3'd1:       // LW
                 if (dm_addr[1:0] == 2'b0) begin
                     // 根据地址的第二位来确定从存储器中读取哪两个字节，并扩展到32位
-                    load_result <= dm_rdata;               
+                    load_result <= dm_rdata;  
+                    adel <= 0;             
                 end else begin
                     // 地址不对齐，报错或异常处理
-                    $display("Error: unaligned address!");
+                    adel <=1;
                 end 
             3'd2:       // LH/LHU
                 if (dm_addr[0] == 1'b0) begin
@@ -222,25 +240,36 @@ module mem(                          // 访存级
                         1'b0: load_result <= {{16{dm_rdata[15] & lb_sign}} , dm_rdata[15:0]}; // 读取低两个字节并符号扩展
                         1'b1: load_result <= {{16{dm_rdata[31] & lb_sign}} , dm_rdata[31:16]}; // 读取高两个字节并符号扩展
                     endcase 
+                    adel <= 0;
                 end else begin
                     // 地址不对齐，报错或异常处理
-                    $display("Error: unaligned address!");
+                    adel <=1;
                 end 
             3'd3:       // LWL
+            begin
+                adel <= 0;
                 case (dm_addr[1:0])
                     2'd0: load_result <= {dm_rdata[ 7:0 ], store_data[23:0]};
                     2'd1: load_result <= {dm_rdata[15:0 ], store_data[15:0]};
                     2'd2: load_result <= {dm_rdata[23:0 ], store_data[7:0] };
                     default: load_result <= {dm_rdata[31:0]};
                 endcase
+            end
             3'd4:       // LWR
+            begin
+                adel <= 0;
                 case (dm_addr)
                     2'd0: load_result <= {dm_rdata[31:0 ]};
                     2'd1: load_result <= {store_data[31:24], dm_rdata[31:8]};
                     2'd2: load_result <= {store_data[31:16], dm_rdata[31:16]};
                     default: load_result <= {store_data[31:8], dm_rdata[31:24]};
                 endcase
-            default: load_result <= dm_rdata; 
+            end
+            default: 
+            begin
+                adel <= 0;
+                load_result <= dm_rdata; 
+            end
         endcase
     end
     // assign load_sign = ls_word[2:0] == 3'd0 ? 
@@ -296,7 +325,8 @@ module mem(                          // 访存级
                          mfhi,mflo,                         // WB需要使用的信号,新增
                          mtc0,mfc0,cp0r_addr,syscall,eret,  // WB需要使用的信号,新增
                          pc,                                // PC值
-                         break};                            // WB需要使用的信号,新增
+                         dm_addr,
+                         break,ov,adel,ades};                            // WB需要使用的信号,新增
 //-----{MEM->WB总线}begin
 
 //-----{展示MEM模块的PC值}begin

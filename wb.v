@@ -2,14 +2,12 @@
 //*************************************************************************
 //   > 文件名: wb.v
 //   > 描述  :五级流水CPU的写回模块
-//   > 作者  : LOONGSON
-//   > 日期  : 2016-04-14
 //*************************************************************************
 `define EXC_ENTER_ADDR 32'd0     // Excption入口地址，
                                  // 此处实现的Exception只有SYSCALL
 module wb(                       // 写回级
     input          WB_valid,     // 写回级有效
-    input  [118:0] MEM_WB_bus_r, // MEM->WB总线
+    input  [153:0] MEM_WB_bus_r, // MEM->WB总线
     output         rf_wen,       // 寄存器写使能
     output [  4:0] rf_wdest,     // 寄存器写地址
     output [ 31:0] rf_wdata,     // 寄存器写数据
@@ -48,8 +46,14 @@ module wb(                       // 写回级
     wire [7 :0] cp0r_addr;
     wire       syscall;   //syscall和eret在写回级有特殊的操作 
     wire       eret;
+    wire [31:0] dm_addr;
     wire       break;
+    wire       adel;        // 地址错例外（读数据或取指令）(仅实现读数据)
+    wire       ades;        // 地址错例外（写数据）
+    // wire       int;         // 中断(暂未实现)
+    // wire       ri;          // 保留指令例外(暂未实现)
     
+
     //pc
     wire [31:0] pc;    
     assign {wen,
@@ -66,7 +70,11 @@ module wb(                       // 写回级
             syscall,
             eret,
             pc,
-            break} = MEM_WB_bus_r;
+            dm_addr,
+            break,
+            ov,
+            adel,
+            ades } = MEM_WB_bus_r;
 //-----{MEM->WB总线}end
 
 //-----{HI/LO寄存器}begin
@@ -101,6 +109,7 @@ module wb(                       // 写回级
    wire [31:0] cp0r_status;
    wire [31:0] cp0r_cause;
    wire [31:0] cp0r_epc;
+   wire [31:0] cp0r_badvaddr;
    
    //写使能
    wire status_wen;
@@ -113,7 +122,8 @@ module wb(                       // 写回级
    wire [31:0] cp0r_rdata;
    assign cp0r_rdata = (cp0r_addr=={5'd12,3'd0}) ? cp0r_status :
                        (cp0r_addr=={5'd13,3'd0}) ? cp0r_cause  :
-                       (cp0r_addr=={5'd14,3'd0}) ? cp0r_epc : 32'd0;
+                       (cp0r_addr=={5'd14,3'd0}) ? cp0r_epc : 
+                       (cp0r_addr=={5'd8,3'd0})  ? cp0r_badvaddr: 32'd0;
    
    //STATUS寄存器
    //目前只实现STATUS[1]位，即EXL域
@@ -126,7 +136,7 @@ module wb(                       // 写回级
        begin
            status_exl_r <= 1'b0;
        end
-       else if (syscall | break) 
+       else if (syscall | break | adel | ades | ov) 
        begin
            status_exl_r <= 1'b1;
        end
@@ -143,34 +153,34 @@ module wb(                       // 写回级
    assign cp0r_cause = {25'd0,cause_exc_code_r,2'd0};
    always @(posedge clk)
    begin
-       if (syscall)
+    //    if(int)
+    //    begin
+    //         cause_exc_code_r <=5'd0;        // 中断(暂未实现)
+    //    end
+       if(adel)
+       begin
+            cause_exc_code_r <=5'd4;        // 地址错例外（读数据或取指令）
+       end
+    //    else if(ri)
+    //    begin
+    //         cause_exc_code_r <=5'd10;       // 保留指令例外(暂未实现)
+    //    end
+       else if (syscall)
        begin
            cause_exc_code_r <= 5'd8;        // 系统调用例外
        end
-    //    else if(int)
-    //    begin
-    //         cause_exc_code_r <=5'd0;        // 中断
-    //    end
-    //    else if(adel)
-    //    begin
-    //         cause_exc_code_r <=5'd4;        // 地址错例外（读数据或取指令）
-    //    end
-    //    else if(ades)
-    //    begin
-    //         cause_exc_code_r <=5'd5;        // 地址错例外（写数据）
-    //    end
        else if(break)
        begin
             cause_exc_code_r <=5'd9;        // 断点例外
        end
-    //    else if(ri)
-    //    begin
-    //         cause_exc_code_r <=5'd10;       // 保留指令例外
-    //    end
-    //    else if(ov)
-    //    begin
-    //         cause_exc_code_r <=5'd12;       // 算出溢出例外
-    //    end
+       else if(ov)
+       begin
+            cause_exc_code_r <=5'd12;       // 算出溢出例外
+       end
+       else if(ades)
+       begin
+            cause_exc_code_r <=5'd5;        // 地址错例外（写数据）
+       end
    end
    
    //EPC寄存器
@@ -180,7 +190,7 @@ module wb(                       // 写回级
    assign cp0r_epc = epc_r;
    always @(posedge clk)
    begin
-       if (syscall)
+       if (syscall | break | adel | ades | ov)
        begin
            epc_r <= pc;
        end
@@ -190,6 +200,16 @@ module wb(                       // 写回级
        end
    end
    
+    //BadVAddr寄存器
+    //BadVAddr 寄存器是一个只读寄存器，用于记录最近一次导致发生地址错例外的虚地址：
+    reg [31:0] badvaddr_r;
+    assign cp0r_badvaddr = badvaddr_r;
+    always @(posedge clk) begin
+        if(adel | ades) begin
+            badvaddr_r <= dm_addr; 
+        end
+    end
+
    //syscall和eret发出的cancel信号
    assign cancel = (syscall | eret) & WB_over;
 //-----{cp0寄存器}begin

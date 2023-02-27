@@ -2,14 +2,12 @@
 //*************************************************************************
 //   > 文件名: exe.v
 //   > 描述  :五级流水CPU的执行模块
-//   > 作者  : LOONGSON
-//   > 日期  : 2016-04-14
 //*************************************************************************
 module exe(                         // 执行级
     input              EXE_valid,   // 执行级有效信号
-    input      [173:0] ID_EXE_bus_r,// ID->EXE总线
+    input      [174:0] ID_EXE_bus_r,// ID->EXE总线
     output             EXE_over,    // EXE模块执行完成
-    output     [156:0] EXE_MEM_bus, // EXE->MEM总线
+    output     [157:0] EXE_MEM_bus, // EXE->MEM总线
     
      //5级流水新增
      input             clk,       // 时钟
@@ -63,7 +61,8 @@ module exe(                         // 执行级
             rf_wen,
             rf_wdest,
             pc,
-            break          } = ID_EXE_bus_r;
+            break,
+            can_ov          } = ID_EXE_bus_r;
 //-----{ID->EXE总线}end
 
 //-----{ALU}begin
@@ -78,6 +77,10 @@ module exe(                         // 执行级
         .alu_result_lo(alu_result_lo)  // O,32,乘法高32位或除法余数
     );
 //-----{ALU}end
+
+    wire ov;                           //是否产生整型溢出
+    assign ov = ({alu_operand1[31],alu_operand2[31],alu_result[31]} == 3'b001 
+                | {alu_operand1[31],alu_operand2[31],alu_result[31]} == 3'b110) & can_ov;    
 
 // //-----{乘法器}begin
 //     wire        mult_begin; 
@@ -130,7 +133,7 @@ module exe(                         // 执行级
                           mtc0,mfc0,cp0r_addr,syscall,eret,//WB需用的信号,新增
                           rf_wen,rf_wdest,                 //WB需用的信号
                           pc,                              //PC
-                          break};                          //WB需用的信号,新增
+                          break, ov};                      //WB需用的信号,新增
 //-----{EXE->MEM总线}end
 
 //-----{展示EXE模块的PC值}begin

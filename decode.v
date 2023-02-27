@@ -2,8 +2,6 @@
 //*************************************************************************
 //   > 文件名: decode.v
 //   > 描述  :五级流水CPU的译码模块
-//   > 作者  : LOONGSON
-//   > 日期  : 2016-04-14
 //*************************************************************************
 module decode(                      // 译码级
     input              ID_valid,    // 译码级有效信号
@@ -15,7 +13,7 @@ module decode(                      // 译码级
     output     [ 32:0] jbr_bus,     // 跳转总线
 //  output             inst_jbr,    // 指令为跳转分支指令,五级流水不需要
     output             ID_over,     // ID模块执行完成
-    output     [173:0] ID_EXE_bus,  // ID->EXE总线
+    output     [174:0] ID_EXE_bus,  // ID->EXE总线
     
     //5级流水新增
     input              IF_over,     //对于分支指令，需要该信号
@@ -150,7 +148,7 @@ module decode(                      // 译码级
     assign inst_SH  = (op == 6'b101001);                        // 存字
     assign inst_SWL = (op == 6'b101010);                        // 寄存器左部存入非对齐地址
     assign inst_SWR = (op == 6'b101110);                        // 寄存器右部存入非对齐地址
-    assign inst_BREAK=(op == 6'b000000) & (funct == 6'b001101) ;// 断点
+    assign inst_BREAK=(op == 6'b000000) & (funct == 6'b001101) ;// 断点(仅实现向cp0寄存器存值)
 
 
     //跳转分支指令
@@ -178,7 +176,7 @@ module decode(                      // 译码级
     wire inst_sll, inst_srl, inst_sra,inst_lui;
     assign inst_add = inst_ADDU | inst_ADDIU | inst_load
                     | inst_store | inst_j_link
-                    | inst_ADD |inst_ADDI;            // 做加法
+                    | inst_ADD |inst_ADDI;                 // 做加法
     assign inst_sub = inst_SUBU | inst_SUB;                // 减法
     assign inst_slt = inst_SLT | inst_SLTI;                // 有符号小于置位
     assign inst_sltu= inst_SLTIU | inst_SLTU;              // 无符号小于置位
@@ -194,6 +192,9 @@ module decode(                      // 译码级
     assign inst_multu=inst_MULTU;
     assign inst_div = inst_DIV;
     assign inst_divu= inst_DIVU;
+
+    wire can_ov;                                           // 是否可能产生溢出
+    assign can_ov = inst_ADD | inst_ADDI | inst_SUB;
     
     //使用sa域作为偏移量的移位指令
     wire inst_shf_sa;
@@ -228,7 +229,7 @@ module decode(                      // 译码级
                       | inst_BGEZ  | inst_load | inst_imm_zero
                       | inst_J     | inst_JAL  | inst_MFC0
                       | inst_SYSCALL| inst_ADDI | inst_BGEZAL
-                      | inst_BLTZAL | inst_BREAK ;                                  ///   待修改
+                      | inst_BLTZAL | inst_BREAK ;                                  
 //-----{指令译码}end
 
 //-----{分支指令执行}begin
@@ -373,8 +374,9 @@ module decode(                      // 译码级
                          mfhi,mflo,                            //WB需用的信号,新增
                          mtc0,mfc0,cp0r_addr,syscall,eret,     //WB需用的信号,新增
                          rf_wen, rf_wdest,                     //WB需用的信号
-                         pc,                                    //PC值
-                         break}; 
+                         pc,                                   //PC值
+                         break,                                //WB需用的信号,新增
+                         can_ov};                              //算出例外相关
 //-----{ID->EXE总线}end
 
 //-----{展示ID模块的PC值}begin

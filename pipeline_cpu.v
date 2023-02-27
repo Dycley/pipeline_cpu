@@ -131,15 +131,15 @@ module pipeline_cpu(  // 多周期cpu
 
 //--------------------------{5级间的总线}begin---------------------------//
     wire [ 63:0] IF_ID_bus;   // IF->ID级总线
-    wire [172:0] ID_EXE_bus;  // ID->EXE级总线
-    wire [156:0] EXE_MEM_bus; // EXE->MEM级总线
-    wire [118:0] MEM_WB_bus;  // MEM->WB级总线
+    wire [174:0] ID_EXE_bus;  // ID->EXE级总线
+    wire [157:0] EXE_MEM_bus; // EXE->MEM级总线
+    wire [153:0] MEM_WB_bus;  // MEM->WB级总线
     
     //锁存以上总线信号
     reg [ 63:0] IF_ID_bus_r;
-    reg [172:0] ID_EXE_bus_r;
-    reg [156:0] EXE_MEM_bus_r;
-    reg [118:0] MEM_WB_bus_r;
+    reg [174:0] ID_EXE_bus_r;
+    reg [157:0] EXE_MEM_bus_r;
+    reg [153:0] MEM_WB_bus_r;
     
     //IF到ID的锁存信号
     always @(posedge clk)
