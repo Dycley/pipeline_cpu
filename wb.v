@@ -104,7 +104,7 @@ module wb(                       // 写回级
 //-----{cp0寄存器}begin
 // cp0寄存器即是协处理器0寄存器
 // 由于目前设计的CPU并不完备，所用到的cp0寄存器也很少
-// 故暂时只实现STATUS(12.0),CAUSE(13.0),EPC(14.0)这三个
+// 故暂时只实现BadVAddr(8,0),STATUS(12.0),CAUSE(13.0),EPC(14.0)这四个
 // 每个CP0寄存器都是使用5位的cp0号
    wire [31:0] cp0r_status;
    wire [31:0] cp0r_cause;

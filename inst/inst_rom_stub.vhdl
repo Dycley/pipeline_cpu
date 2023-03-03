@@ -1,7 +1,7 @@
 -- Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 -- --------------------------------------------------------------------------------
 -- Tool Version: Vivado v.2019.2 (win64) Build 2708876 Wed Nov  6 21:40:23 MST 2019
--- Date        : Mon Feb 27 18:44:48 2023
+-- Date        : Fri Mar  3 10:55:40 2023
 -- Host        : LAPTOP-RJ3DJ0QF running 64-bit major release  (build 9200)
 -- Command     : write_vhdl -force -mode synth_stub D:/workplace/vivado/myproject/8_pipeline_cpu/inst/inst_rom_stub.vhdl
 -- Design      : inst_rom

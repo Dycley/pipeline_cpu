@@ -63,7 +63,7 @@ module tb;
         clk = 0;
         resetn = 0;
         rf_addr = 0;
-        mem_addr = 32'h0000_0004;
+        mem_addr = 32'h0000_0000;
 
         // Wait 100 ns for global reset to finish
         #100;

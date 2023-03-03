@@ -10,7 +10,7 @@ module alu(
     input  [31:0] alu_src1,     // ALU操作数1,为补码
     input  [31:0] alu_src2,     // ALU操作数2，为补码
     output [31:0] alu_result,    // ALU结果
-    output [31:0] alu_result_lo  // 乘法高32位或除法的商 
+    output [31:0] alu_result_lo  // 乘法低32位或除法的商 
     );
 
     // ALU控制信号，独热码
@@ -164,11 +164,11 @@ module alu(
 
     wire [31:0] mul_or_div_op1;
     wire [31:0] mul_or_div_op2;
-    assign mul_or_div_op1 = alu_multu | alu_divu ? alu_src1 :
-                            alu_mult  | alu_div  ? (alu_src1[31] ? ~alu_src1+1 : alu_src1) :
+    assign mul_or_div_op1 = (alu_multu | alu_divu) ? alu_src1 :
+                            (alu_mult  | alu_div)  ? (alu_src1[31] ? ~alu_src1+1 : alu_src1) :
                             32'd0;
-    assign mul_or_div_op2 = alu_multu | alu_divu ? alu_src2 :
-                            alu_mult  | alu_div  ? (alu_src2[31] ? ~alu_src2+1 : alu_src2) :
+    assign mul_or_div_op2 = (alu_multu | alu_divu) ? alu_src2 :
+                            (alu_mult  | alu_div)  ? (alu_src2[31] ? ~alu_src2+1 : alu_src2) :
                             32'd0;
 //-----{乘法器}begin
     wire [63:0] mul_result_ori;
@@ -188,14 +188,14 @@ module alu(
         .shang(div_result_ori[31:0]),
         .yushu(div_result_ori[63:32])
     );
-    assign div_result = alu_div & (alu_src1[31] ^ alu_src2[31]) ? (~div_result_ori[31:0]+1) :div_result_ori[31:0];
+    assign div_result[31:0] = alu_div & (alu_src1[31] ^ alu_src2[31]) ? (~div_result_ori[31:0]+1) :div_result_ori[31:0];
     assign div_result[63:32] = div_result_ori[63:32]; 
 //-----{除法器}end
 
     // 选择相应结果输出
     assign alu_result = (alu_add|alu_sub) ? add_sub_result[31:0] : 
-                        alu_mult          ? mul_result[31:0] :
-                        alu_div           ? div_result[31:0] :
+                        (alu_mult|alu_multu)?mul_result[63:32] :
+                        (alu_div|alu_divu) ? div_result[63:32] :
                         alu_slt           ? slt_result :
                         alu_sltu          ? sltu_result :
                         alu_and           ? and_result :
@@ -208,8 +208,8 @@ module alu(
                         alu_lui           ? lui_result :
                         32'd0;
                         
-    assign alu_result_lo = alu_mult       ? mul_result[63:32] : //高32位
-                        alu_div           ? div_result[63:32] : //余数
+    assign alu_result_lo = (alu_mult|alu_multu)   ? mul_result[31:0] : //低32位
+                        (alu_div|alu_divu)        ? div_result[31:0] : //商
                         32'd0;                 
               
 endmodule
